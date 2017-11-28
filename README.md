@@ -9,7 +9,7 @@
 [![codecov](https://codecov.io/gh/baianat/vee-validate/branch/master/graph/badge.svg)](https://codecov.io/gh/baianat/vee-validate)
 [![Build Status](https://travis-ci.org/baianat/vee-validate.svg?branch=master)](https://travis-ci.org/baianat/vee-validate)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/087bd788687c4ccab6650756ce56fa05)](https://www.codacy.com/app/baianat/vee-validate?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=baianat/vee-validate&amp;utm_campaign=Badge_Grade)
-[![CDNJS](https://img.shields.io/cdnjs/v/vee-validate.svg)](https://cdnjs.com/libraries/vee-validate/2.0.0-rc.19)
+[![CDNJS](https://img.shields.io/cdnjs/v/vee-validate.svg)](https://cdnjs.com/libraries/vee-validate/2.0.0-rc.25)
 [![npm](https://img.shields.io/npm/dm/vee-validate.svg)](https://npm-stat.com/charts.html?package=vee-validate)
 [![npm](https://img.shields.io/npm/v/vee-validate.svg)](https://www.npmjs.com/package/vee-validate)
 [![Average time to resolve an issue](http://isitmaintained.com/badge/resolution/baianat/vee-validate.svg)](http://isitmaintained.com/project/baianat/vee-validate "Average time to resolve an issue")
@@ -105,7 +105,7 @@ This library uses ES6 Promises so be sure to provide a polyfill for it for the b
 You are welcome to contribute to this repo with anything you think is useful. Fixes are more than welcome.
 However if you are adding a new validation rule, it should have multiple uses or be as generic as possible.
 
-You can find more information in the [contribution guide](contributing.md).
+You can find more information in the [contribution guide](CONTRIBUTING.md).
 
 ### Tutorials and Examples
 

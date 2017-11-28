@@ -26,7 +26,7 @@ export default class Validator {
   paused: boolean;
   ownerId: string | number;
   clean: () => void;
-  reset: () => void;
+  reset: () => Promise;
 
   constructor (validations?: MapObject, options?: MapObject = { vm: null, fastExit: true }) {
     this.strict = STRICT_MODE;
@@ -39,13 +39,19 @@ export default class Validator {
     this.ownerId = options.vm && options.vm._uid;
     // create it statically since we don't need constant access to the vm.
     this.reset = options.vm && isCallable(options.vm.$nextTick) ? () => {
-      options.vm.$nextTick(() => {
-        this.fields.items.forEach(i => i.reset());
-        this.errors.clear();
+      return new Promise((resolve, reject) => {
+        options.vm.$nextTick(() => {
+          this.fields.items.forEach(i => i.reset());
+          this.errors.clear();
+          resolve();
+        });
       });
     } : () => {
-      this.fields.items.forEach(i => i.reset());
-      this.errors.clear();
+      return new Promise((resolve, reject) => {
+        this.fields.items.forEach(i => i.reset());
+        this.errors.clear();
+        resolve();
+      });
     };
     /* istanbul ignore next */
     this.clean = () => {
@@ -139,68 +145,12 @@ export default class Validator {
   }
 
   /**
-   * Sets the default locale for all validators.
-   * @deprecated
-   */
-  static setLocale (language?: string = 'en') {
-    Validator.locale = language;
-  }
-
-  /**
-   * @deprecated
-   */
-  static installDateTimeValidators () {
-    /* istanbul ignore next */
-    warn('Date validations are now installed by default, you no longer need to install it.');
-  }
-
-  /**
-   * @deprecated
-   */
-  installDateTimeValidators () {
-    /* istanbul ignore next */
-    warn('Date validations are now installed by default, you no longer need to install it.');
-  }
-
-  /**
    * Sets the operating mode for all newly created validators.
    * strictMode = true: Values without a rule are invalid and cause failure.
    * strictMode = false: Values without a rule are valid and are skipped.
    */
   static setStrictMode (strictMode?: boolean = true) {
     STRICT_MODE = strictMode;
-  }
-
-  /**
-   * Updates the dictionary, overwriting existing values and adding new ones.
-   * @deprecated
-   */
-  static updateDictionary (data) {
-    DICTIONARY.merge(data);
-  }
-
-  /**
-   * Adds a locale object to the dictionary.
-   * @deprecated
-   */
-  static addLocale (locale) {
-    if (! locale.name) {
-      warn('Your locale must have a name property');
-      return;
-    }
-
-    this.updateDictionary({
-      [locale.name]: locale
-    });
-  }
-
-  /**
-   * Adds a locale object to the dictionary.
-   * @deprecated
-   * @param {Object} locale
-   */
-  addLocale (locale) {
-    Validator.addLocale(locale);
   }
 
   /**
@@ -213,21 +163,31 @@ export default class Validator {
   /**
    * Adds and sets the current locale for the validator.
    */
-  static localize (lang: string, dictionary?: MapObject) {
-    // merge the dictionary.
-    if (dictionary) {
-      dictionary = assign({}, dictionary, { name: lang });
-      Validator.addLocale(dictionary);
+  static localize (lang: string | MapObject, dictionary?: MapObject) {
+    if (isObject(lang)) {
+      DICTIONARY.merge(lang);
+      return;
     }
 
-    // set the locale.
-    Validator.locale = lang;
+    // merge the dictionary.
+    if (dictionary) {
+      const locale = lang || dictionary.name;
+      dictionary = assign({}, dictionary);
+      DICTIONARY.merge({
+        [locale]: dictionary
+      });
+    }
+
+    if (lang) {
+      // set the locale.
+      Validator.locale = lang;
+    }
   }
 
   /**
    * Registers a field to be validated.
    */
-  attach (field: MapObject | Field): Field {
+  attach (field: FieldOptions | Field): Field {
     // deprecate: handle old signature.
     if (arguments.length > 1) {
       field = assign({}, {
@@ -248,9 +208,9 @@ export default class Validator {
     if (field.initial) {
       this.validate(`#${field.id}`, value || field.value);
     } else {
-      this._validate(field, value || field.value, true).then(valid => {
-        field.flags.valid = valid;
-        field.flags.invalid = !valid;
+      this._validate(field, value || field.value, true).then(result => {
+        field.flags.valid = result.valid;
+        field.flags.invalid = !result.valid;
       });
     }
 
@@ -302,9 +262,10 @@ export default class Validator {
    */
   update (id: string, { scope }) {
     const field = this._resolveField(`#${id}`);
-    this.errors.update(id, { scope });
+    if (!field) return;
 
     // remove old scope.
+    this.errors.update(id, { scope });
     if (!isNullOrUndefined(field.scope) && this.flags[`$${field.scope}`]) {
       delete this.flags[`$${field.scope}`][field.name];
     } else if (isNullOrUndefined(field.scope)) {
@@ -319,22 +280,6 @@ export default class Validator {
    */
   remove (name: string) {
     Validator.remove(name);
-  }
-
-  /**
-   * Sets the validator current language.
-   * @deprecated
-   */
-  setLocale (language: string) {
-    this.locale = language;
-  }
-
-  /**
-   * Updates the messages dictionary, overwriting existing values and adding new ones.
-   * @deprecated
-   */
-  updateDictionary (data: MapObject) {
-    Validator.updateDictionary(data);
   }
 
   /**
@@ -364,7 +309,6 @@ export default class Validator {
       return this._handleFieldNotFound(name, scope);
     }
 
-    this.errors.remove(field.name, field.scope, field.id);
     field.flags.pending = true;
     if (arguments.length === 1) {
       value = field.value;
@@ -375,15 +319,18 @@ export default class Validator {
     return this._validate(field, value, silentRun).then(result => {
       field.setFlags({
         pending: false,
-        valid: result,
+        valid: result.valid,
         validated: true
       });
 
+      this.errors.remove(field.name, field.scope, field.id);
       if (silentRun) {
         return Promise.resolve(true);
+      } else if (result.errors) {
+        result.errors.forEach(e => this.errors.add(e));
       }
 
-      return result;
+      return result.valid;
     });
   }
 
@@ -516,7 +463,7 @@ export default class Validator {
    * Resolves an appropriate display name, first checking 'data-as' or the registered 'prettyName'
    */
   _getFieldDisplayName (field: Field) {
-    return field.displayName || this.dictionary.getAttribute(LOCALE, field.name, field.name);
+    return field.alias || this.dictionary.getAttribute(LOCALE, field.name, field.name);
   }
 
   /**
@@ -535,7 +482,7 @@ export default class Validator {
   /**
    * Tests a single input value against a rule.
    */
-  _test (field: Field, value: any, rule: MapObject, silent?: boolean) {
+  _test (field: Field, value: any, rule: MapObject): ValidationResult | Promise<ValidationResult> {
     const validator = RULES[rule.name];
     let params = Array.isArray(rule.params) ? toArray(rule.params) : [];
     let targetName = null;
@@ -547,7 +494,7 @@ export default class Validator {
     if (/(confirmed|after|before)/.test(rule.name)) {
       const target = find(field.dependencies, d => d.name === rule.name);
       if (target) {
-        targetName = target.field.displayName;
+        targetName = target.field.alias;
         params = [target.field.value].concat(params.slice(1));
       }
     } else if (rule.name === 'required' && field.rejectsFalse) {
@@ -576,17 +523,16 @@ export default class Validator {
           data = values.data;
         }
 
-        if (!allValid && !silent) {
-          this.errors.add({
+        return {
+          valid: allValid,
+          error: allValid ? undefined : {
             id: field.id,
             field: field.name,
             msg: this._formatErrorMessage(field, rule, data, targetName),
             rule: rule.name,
             scope: field.scope
-          });
-        }
-
-        return allValid;
+          }
+        };
       });
     }
 
@@ -594,17 +540,16 @@ export default class Validator {
       result = { valid: result, data: {} };
     }
 
-    if (!result.valid && !silent) {
-      this.errors.add({
+    return {
+      valid: result.valid,
+      error: result.valid ? undefined : {
         id: field.id,
         field: field.name,
         msg: this._formatErrorMessage(field, rule, result.data, targetName),
         rule: rule.name,
         scope: field.scope
-      });
-    }
-
-    return result.valid;
+      }
+    };
   }
 
   /**
@@ -698,33 +643,51 @@ export default class Validator {
   /**
    * Starts the validation process.
    */
-  _validate (field: Field, value: any, silent?: boolean = false): Promise<boolean> {
+  _validate (field: Field, value: any, silent?: boolean = false): Promise<ValidationResult> {
     if (!field.isRequired && (isNullOrUndefined(value) || value === '')) {
-      return Promise.resolve(true);
+      return Promise.resolve({ valid: true });
     }
 
     const promises = [];
+    const errors = [];
     let isExitEarly = false;
     // use of '.some()' is to break iteration in middle by returning true
     Object.keys(field.rules).some(rule => {
-      const result = this._test(field, value, { name: rule, params: field.rules[rule] }, silent);
-
+      const result = this._test(field, value, { name: rule, params: field.rules[rule] });
       if (isCallable(result.then)) {
         promises.push(result);
-      } else if (this.fastExit && !result) {
+      } else if (this.fastExit && !result.valid) {
+        errors.push(result.error);
         isExitEarly = true;
       } else {
-        const resultAsPromise = new Promise(resolve => {
+        // promisify the result.
+        promises.push(new Promise(resolve => {
           resolve(result);
-        });
-        promises.push(resultAsPromise);
+        }));
       }
 
       return isExitEarly;
     });
 
-    if (isExitEarly) return Promise.resolve(false);
+    if (isExitEarly) {
+      return Promise.resolve({
+        valid: false,
+        errors
+      });
+    }
 
-    return Promise.all(promises).then(values => values.every(t => t));
+    return Promise.all(promises).then(values => values.map(v => {
+      if (!v.valid) {
+        errors.push(v.error);
+      }
+
+      return v.valid;
+    }).every(t => t)
+    ).then(result => {
+      return {
+        valid: result,
+        errors
+      };
+    });
   }
 }

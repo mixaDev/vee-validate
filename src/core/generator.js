@@ -1,11 +1,24 @@
-import { getScope, getDataAttribute, isObject, toArray, find, getPath, hasPath, isNullOrUndefined, isCallable } from './utils';
+import Config from '../config';
+import {
+  getScope,
+  getDataAttribute,
+  isObject,
+  toArray,
+  find,
+  getPath,
+  hasPath,
+  isNullOrUndefined,
+  isCallable,
+  deepParseInt,
+} from './utils';
 
 /**
  * Generates the options required to construct a field.
  */
 export default class Generator {
-  static generate (el, binding, vnode, options = {}) {
+  static generate (el, binding, vnode) {
     const model = Generator.resolveModel(binding, vnode);
+    const options = Config.resolve(vnode.context);
 
     return {
       name: Generator.resolveName(el, vnode),
@@ -23,7 +36,6 @@ export default class Generator {
       delay: Generator.resolveDelay(el, vnode, options),
       rules: Generator.resolveRules(el, binding),
       initial: !!binding.modifiers.initial,
-      alias: Generator.resolveAlias(el, vnode),
       validity: options.validity,
       aria: options.aria,
       initialValue: Generator.resolveInitialValue(vnode)
@@ -39,12 +51,10 @@ export default class Generator {
   }
 
   /**
-   *
-   * @param {*} el
-   * @param {*} binding
+   * Resolves the rules defined on an element.
    */
   static resolveRules (el, binding) {
-    if (!binding || !binding.expression) {
+    if (!binding.value && (!binding || !binding.expression)) {
       return getDataAttribute(el, 'rules');
     }
 
@@ -95,18 +105,15 @@ export default class Generator {
    * @param {*} vnode
    * @param {Object} options
    */
-  static resolveDelay (el, vnode, options = {}) {
-    return getDataAttribute(el, 'delay') || (vnode.child && vnode.child.$attrs && vnode.child.$attrs['data-vv-delay']) || options.delay;
-  }
+  static resolveDelay (el, vnode, options) {
+    let delay = getDataAttribute(el, 'delay');
+    let globalDelay = (options && 'delay' in options) ? options.delay : 0;
 
-  /**
-   * Resolves the alias for the field.
-   * @param {*} el
-   * @param {*} vnode
-   * @return {Function} alias getter
-   */
-  static resolveAlias (el, vnode) {
-    return () => getDataAttribute(el, 'as') || (vnode.child && vnode.child.$attrs && vnode.child.$attrs['data-vv-as']) || el.title || null;
+    if (!delay && vnode.child && vnode.child.$attrs) {
+      delay = vnode.child.$attrs['data-vv-delay'];
+    }
+
+    return (delay) ? { local: { input: parseInt(delay) }, global: deepParseInt(globalDelay) } : { global: deepParseInt(globalDelay) };
   }
 
   /**

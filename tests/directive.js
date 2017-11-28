@@ -1,9 +1,9 @@
 import Vue from 'vue/dist/vue';
-import makeDirective from '../src/directive';
+import directive from '../src/directive';
 
 test('warns if no validator was found during binding', () => {
   let VM = Vue.extend({
-    directives: { validate: makeDirective() },
+    directives: { validate: directive },
     template: `
       <input v-validate>
     `
@@ -28,7 +28,7 @@ test('adds the field after binding', () => {
     }
   };
   const VM = Vue.extend({
-    directives: { validate: makeDirective() },
+    directives: { validate: directive },
     beforeCreate() {
       this.$validator = $validator
     },
@@ -63,7 +63,7 @@ test('evaluates field options after update', done => {
     data: () => ({
       value: ''
     }),
-    directives: { validate: makeDirective() },
+    directives: { validate: directive },
     beforeCreate() {
       this.$validator = $validator
     },
@@ -98,7 +98,7 @@ test('expression can contain an object containing the scope', done => {
     data: () => ({
       value: ''
     }),
-    directives: { validate: makeDirective() },
+    directives: { validate: directive },
     beforeCreate() {
       this.$validator = $validator
     },
@@ -129,7 +129,7 @@ test('cleans up after unbinding', () => {
     detach: jest.fn()
   };
   const VM = Vue.extend({
-    directives: { validate: makeDirective() },
+    directives: { validate: directive },
     beforeCreate() {
       this.$validator = $validator
     },
@@ -167,23 +167,23 @@ test('revises scope after inserted', async () => {
   };
   const VM = Vue.extend({
     data: () => ({
-      value: '',
-      name: 'some'
+      scope: null,
+      value: null
     }),
-    directives: { validate: makeDirective() },
+    directives: { validate: directive },
     beforeCreate() {
       this.$validator = $validator
     },
     template: `
-      <input v-validate="value" v-model="value" :name="name">
+      <input v-validate="'required'" v-model="value" name="name" :data-vv-scope="scope">
     `
   });
   const app = new VM().$mount();
-  app.value = 'new';
+  app.scope = 'new';
   await app.$nextTick(); // different expression.
   expect(field.update).toHaveBeenCalledTimes(1); // expression changed.
 
-  app.name = 'other'; 
+  app.scope = 'other'; 
   await app.$nextTick();
   expect(field.update).toHaveBeenCalledTimes(1); // no meaningful change was detected, so it didn't update.
 });
